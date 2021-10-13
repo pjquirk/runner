@@ -122,7 +122,7 @@ namespace GitHub.Runner.Worker
                         }
                     }
 
-                    try 
+                    try
                     {
                         var tokenPermissions = jobContext.Global.Variables.Get("system.github.token.permissions") ?? "";
                         if (!string.IsNullOrEmpty(tokenPermissions))
@@ -135,7 +135,7 @@ namespace GitHub.Runner.Worker
                             }
                             context.Output("##[endgroup]");
                         }
-                    } 
+                    }
                     catch (Exception ex)
                     {
                         context.Output($"Fail to parse and display GITHUB_TOKEN permissions list: {ex.Message}");
@@ -179,6 +179,18 @@ namespace GitHub.Runner.Worker
                         context.SetGitHubContext("server_url", $"{url.Scheme}://{url.Host}{portInfo}");
                         context.SetGitHubContext("api_url", $"{url.Scheme}://{url.Host}{portInfo}/api/v3");
                         context.SetGitHubContext("graphql_url", $"{url.Scheme}://{url.Host}{portInfo}/api/graphql");
+                    }
+
+                    // Add non-secret variables as environment variables first, so workflows/jobs can override them
+                    const string pipelineVariablePrefix = "PipelineVariable.";
+                    var pipelineVariables = message.Variables
+                        .Where(kvp => !kvp.Value.IsSecret)
+                        .Where(kvp => kvp.Key.StartsWith(pipelineVariablePrefix, StringComparison.Ordinal))
+                        .Select(kvp => (Name: kvp.Key.Replace(pipelineVariablePrefix, string.Empty), Value: kvp.Value.Value ?? string.Empty));
+                    foreach (var pair in pipelineVariables)
+                    {
+                        context.Global.EnvironmentVariables[pair.Name] = pair.Value ;
+                        context.SetEnvContext(pair.Name, pair.Value);
                     }
 
                     // Evaluate the job-level environment variables
